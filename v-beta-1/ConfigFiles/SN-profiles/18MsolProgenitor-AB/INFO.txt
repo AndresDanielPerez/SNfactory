@@ -1,0 +1,26 @@
+Taken from:
+
+    Observable signatures of enhanced axion emission from protoneutron stars
+    Tobias Fischer, Pierluca Carenza, Bryce Fore, Maurizio Giannotti, Alessandro Mirizzi, Sanjay Reddy
+
+    Phys.Rev.D 104 (2021) 10, 103012
+    https://arxiv.org/abs/2108.13726
+
+
+
+Please cite:
+
+@article{Fischer:2021jfm,
+    author = "Fischer, Tobias and Carenza, Pierluca and Fore, Bryce and Giannotti, Maurizio and Mirizzi, Alessandro and Reddy, Sanjay",
+    title = "{Observable signatures of enhanced axion emission from protoneutron stars}",
+    eprint = "2108.13726",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ph",
+    doi = "10.1103/PhysRevD.104.103012",
+    journal = "Phys. Rev. D",
+    volume = "104",
+    number = "10",
+    pages = "103012",
+    year = "2021"
+}
+

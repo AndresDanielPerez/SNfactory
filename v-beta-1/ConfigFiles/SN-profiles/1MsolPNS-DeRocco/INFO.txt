@@ -1,0 +1,25 @@
+Taken from:
+
+    Supernova signals of light dark matter
+    William DeRocco, Peter W. Graham, Daniel Kasen, Gustavo Marques-Tavares, Surjeet Rajendran
+
+    Phys.Rev.D 100 (2019) 7, 075018
+    https://arxiv.org/abs/1905.09284
+
+
+
+Please cite:
+
+@article{DeRocco:2019jti,
+    author = "DeRocco, William and Graham, Peter W. and Kasen, Daniel and Marques-Tavares, Gustavo and Rajendran, Surjeet",
+    title = "{Supernova signals of light dark matter}",
+    eprint = "1905.09284",
+    archivePrefix = "arXiv",
+    primaryClass = "hep-ph",
+    doi = "10.1103/PhysRevD.100.075018",
+    journal = "Phys. Rev. D",
+    volume = "100",
+    number = "7",
+    pages = "075018",
+    year = "2019"
+}
