@@ -118,9 +118,9 @@ class SNdistribution:
       
       
 
-    def SNsimulation(self, num_ITER, time_low, time_up):
+    def SNsimulation(self, num_ITER, time_low, time_up, rng_num = 12345):
     
-      rng = np.random.default_rng(12345)
+      rng = np.random.default_rng(rng_num)
     
       
       # num_ITER: number of iterations
@@ -165,15 +165,15 @@ class SNdistribution:
       
       
     def Eflux1sim(self, ma, texposure, SN_sim_it):
-      """ computes the energy [MeV] and distance to Earth [kpc] of the ALPs that would reach Earth for EACH SN in 1 SIMULATION """
+      """ computes the energy [MeV] and distance to Earth [kpc] of the particles that would reach Earth for EACH SN in 1 SIMULATION """
       """ considering an exposure time, texposure [s], for each SN in a given a simulation SN_sim_it
       SN_sim_it: several SNe each one with [rSN, thetaSN, zSN, tSN] """
       
       Erange = []
       for isn, SNevent in enumerate(SN_sim_it):  
 	      rSN, thetaSN, zSN, tSN = SNevent
-	      E1 = self.Earrival(tSN - texposure, ma, rSN, thetaSN, zSN) # ALP energy at the end of the exposure time (lower)
-	      E2 = self.Earrival(tSN, ma, rSN, thetaSN, zSN) # ALP energy at the beginning of the experiment (higher)
+	      E1 = self.Earrival(tSN - texposure, ma, rSN, thetaSN, zSN) # particle energy at the end of the exposure time (lower)
+	      E2 = self.Earrival(tSN, ma, rSN, thetaSN, zSN) # particle energy at the beginning of the experiment (higher)
 	      dSN = self.dSNearth(rSN, thetaSN, zSN)
 	      Erange.append([E1, E2, dSN])
       
@@ -275,7 +275,7 @@ class SNdistribution:
 	      all_bin_results.append(bins_result)
 
       all_bin_results = np.array(all_bin_results)  # shape: (Nsim, Nbines)
-      median_bins = np.mean(all_bin_results, axis=0)
+      median_bins = np.median(all_bin_results, axis=0)
       p16, p84 = np.percentile(all_bin_results, [16, 84], axis=0)
 
       return median_bins, p16, p84, all_bin_results
