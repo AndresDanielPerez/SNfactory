@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.special import spherical_jn  # BesselJ[1] ≡ spherical_jn(1, x)
 from scipy.integrate import quad
+from scipy import stats
 
 from constants import Units, Constants
 from SNprofiles import SNprofiles_lightDM
@@ -106,6 +107,11 @@ class DmAcross:
         Returns:
         - dσ/dE_rec [cm^2 / MeV]
         """
+        
+        Erec_max = 2 * p**2 / self.mA
+
+        if Erec <= 0 or Erec >= Erec_max:
+            return 0.0
 
         sqrt_mA2_p2 = np.sqrt(self.mA**2 + p**2)
         sqrt_mchi2_p2 = np.sqrt(mchi**2 + p**2)
@@ -248,6 +254,32 @@ class DmAcross:
            
         return result2 * (Mtarget / (self.mA * self.MeVtokg)) * Texp # adimensional
         
+        
+        
+    def spectra_eff(self, mchi, y_coup, rad, Nchi, Mtarget, Texp, Emin, Emax, eff_Function):
+        """
+        Total recoil events
+        Mtarget in kg
+        Texp in seconds
+        Includes the Efficiency as a function eff_Function(E_recoil) with E_recoil in keV (that is why it is multiplied by 1000 beacuse everything else is in MeV)
+        """
+        def integrand_Erec(Erec):
+            def integrand_pinf(pinf):
+            	p0 = self.Fp0(pinf, mchi, rad) # MeV
+            	dsdE = self.dsigmadErec(mchi, pinf, Erec, y_coup) * eff_Function(Erec*1000) # [cm^2 / MeV]
+            	dflux = self.diffFlux(mchi, p0, rad, Nchi) # [cm^-2 s^-1 MeV^-1]
+            	return dsdE * dflux # [s^-1 MeV^-2]
+            	
+            p_min = np.sqrt(0.5 * self.mA * Erec)  # kinematics
+            
+            result, _ = quad(integrand_pinf, p_min, np.inf, limit=100, epsabs=1e-8, epsrel=1e-8)
+            return result  # [s^-1 MeV^-1]
+    		
+        # Integrate over Erec
+        result2, _ = quad(integrand_Erec, Emin, Emax, limit=100, epsabs=1e-8, epsrel=1e-8)
+           
+        return result2 * (Mtarget / (self.mA * self.MeVtokg)) * Texp # adimensional
+        
 
         
             
@@ -283,7 +315,7 @@ class DmAcross:
 
 
     def flux_1sim_BINS(self, Erange, Ebins, mchi, rad, Nchi):
-      """ computes how the flux would be reduced due to the distance [cm^-2] (BINNED), considering the contributions of EVERY SN in 1 SIMULATION """
+      """ computes how the flux would be reduced due to the distance [cm^-2] (BINNED-> normalized to bin size, so cm^-2 MeV^-1), considering the contributions of EVERY SN in 1 SIMULATION """
 
       result_bins = [] # flux per bin
 
@@ -303,7 +335,7 @@ class DmAcross:
 	      			Eoverlap_min,
                 		Eoverlap_max, 
                 		epsrel=1e-2, epsabs=1e-2 )
-	      		integral_bin += integral # cm^-2 (binwidth)MeV^-1
+	      		integral_bin += integral / (Ebin_max - Ebin_min) # cm^-2 (binwidth)MeV^-1
 
 	      result_bins.append(integral_bin)
 
@@ -337,8 +369,8 @@ class DmAcross:
         integrand,
         Echi_min,
         np.inf,
-        epsrel=1e-2,
-        epsabs=1e-2
+        epsrel=1e-1,
+        epsabs=1e-1
       )
 
       return integral_result * (1000 / (self.mA * self.MeVtokg))# [MeV^-1 ton^-1]
@@ -357,18 +389,72 @@ class DmAcross:
             Ebin_min, Ebin_max = Erec_bins[i], Erec_bins[i+1]
       	
             # Integrate dNgammadEgamma_1sim entre E1 y E2
-            integral, _ = quad(lambda E: self.dspectra_1sim(E, mchi, y_coup, rad, Nchi, Erange), Ebin_min, Ebin_max, epsabs=1e-2, epsrel=1e-2)
+            integral, _ = quad(lambda E: self.dspectra_1sim(E, mchi, y_coup, rad, Nchi, Erange), Ebin_min, Ebin_max, epsabs=1e-1, epsrel=1e-1)
                        			
             binned_vals.append(integral * (Mtarget/1000) / (Ebin_max - Ebin_min))
         
         return np.array(binned_vals) # adimensional
         
+        
+        
+    def dspectra_1sim_BINS_eff(self,Erec_bins, mchi, y_coup, rad, Nchi, Mtarget, Erange, eff_Function):
+        """
+        Total recoil events per bin
+        Mtarget in kg
+        Includes the Efficiency as a function eff_Function(E_recoil) with E_recoil in keV (that is why it is multiplied by 1000 beacuse everything else is in MeV)
+        """
+
+        binned_vals = []
+
+        for i in range(len(Erec_bins) - 1):
+            Ebin_min, Ebin_max = Erec_bins[i], Erec_bins[i+1]
+
+            # Integrate dNgammadEgamma_1sim entre E1 y E2
+            integral, _ = quad(lambda E: self.dspectra_1sim(E, mchi, y_coup, rad, Nchi, Erange) * eff_Function(E*1000), Ebin_min, Ebin_max, epsabs=1e-1, epsrel=1e-1)
+
+            binned_vals.append(integral * (Mtarget/1000) / (Ebin_max - Ebin_min))
+
+        return np.array(binned_vals) # adimensional
 
         
-        
-        
-        
+    def dspectra_from_fluence_BINS(self, Erec_bins, Ebins_chi, Fchi_bins, mchi, y_coup, Mtarget, eff_Function):
+        """
+        Detector response using binned DM fluence
+        Returns:
+        events per recoil-energy bin
+        """
 
+        dE_chi = Ebins_chi[1] - Ebins_chi[0]
+        Echi_centers = 0.5 * (Ebins_chi[:-1] + Ebins_chi[1:])
+
+        events_bins = []
+
+        for i in range(len(Erec_bins) - 1):
+            Erec_min, Erec_max = Erec_bins[i], Erec_bins[i+1]
+
+            events_bin = 0.0
+
+            for j, Echi in enumerate(Echi_centers):
+
+                #Erec_max_kin = 2 * (pchi**2) / self.mA 
+                #upper = min(Erec_max, Erec_max_kin)
+
+                # integrate dσ/dErec over recoil bin
+                sigma_bin, _ = quad(
+                    lambda Erec: self.dsigmadErec(mchi, self.E_to_p(Echi, mchi), Erec, y_coup) * eff_Function(Erec * 1000), # (dsigmadErec in cm**2 MeV**-1)
+                    Erec_min,
+                    Erec_max,
+                    epsrel=1e-2,
+                    epsabs=1e-2
+                ) # cm**2
+
+                events_bin += Fchi_bins[j] * sigma_bin * dE_chi  # adimensional   # cm^-2 MeV**-1 * cm**2 * MeV
+
+            # multiply by target mass
+            events_bins.append(events_bin * (Mtarget / (self.mA * self.MeVtokg)) / (Erec_max - Erec_min)) # MeV**-1
+
+        return np.array(events_bins)
+        
       
       
       
@@ -387,3 +473,45 @@ class DmAcross:
         binned_vals.append(integral / (Ebin_max - Ebin_min))
         
       return np.array(binned_vals)
+      
+      
+
+        
+    def compute_Z_poisson_grid(self, S, Nobs, B):
+        """
+        Compute exclusion significance Z on a (m, g) grid using a Poisson likelihood ratio test (1 dof).
+
+        Parameters
+        ----------
+        S : 2D array        Expected signal events S(m, g)
+        Nobs : float        Observed number of events
+        B : float        Expected background events
+
+        Returns
+        -------
+        Z_grid : 2D array        Significance Z
+        """
+
+        # total expectation
+        mu = S + B
+
+        if Nobs == 0:
+            p_value = stats.poisson.cdf(0, mu) # p-value from poisson distribution
+       
+            # 90% CL (p=0.10), Z = 1.28 (1 tail paradigm)
+            # 95% CL (p=0.05), Z = 1.64
+            Z = np.abs(stats.norm.ppf(p_value))
+            return Z
+
+        else:
+            # avoid log(0)
+            mu = np.clip(mu, 1e-12, None)
+    
+            # likelihood-ratio test statistic
+            q = 2.0 * (mu - Nobs + Nobs * np.log(Nobs / mu))
+    
+            # enforce physical boundary q >= 0
+            q = np.maximum(q, 0.0)
+    
+            Z = np.sqrt(q)
+            return Z

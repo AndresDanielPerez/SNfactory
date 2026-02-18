@@ -47,6 +47,12 @@ class ALPphotonDET:
         return numerator / denominator
 
     def dSigma_dEgamma(self, E_gamma, Ea, ma, ga):
+        Eamin_val = self.Eamin(E_gamma, ma)
+        Eamax_val = self.Eamax(E_gamma, ma)
+
+        if Ea < Eamin_val or Ea > Eamax_val:
+            return 0.0
+            
         return (1 / (32 * np.pi * self.mn * (Ea**2 - ma**2))) * self.M2(E_gamma, Ea, ma, ga)
         
 
@@ -171,7 +177,7 @@ class ALPphotonDET:
         					weight = 1.0 / (4 * np.pi * (dSN * self.kpctocm)**2)  # dSN in kpc → cm
         					total += val * weight 
         				except Exception as e:
-        				#	print(f"[⚠️ Error dNdEdt in Ea={ea:.4f}, ma={ma}]: {e}")
+        				#	print(f"[Error dNdEdt in Ea={ea:.4f}, ma={ma}]: {e}")
         					continue
         		result[i] = total * self.Deltat * self.stoMeVminus1 # cm^-2 MeV^-1
         	return result[0] if result.size == 1 else result
@@ -180,7 +186,7 @@ class ALPphotonDET:
         
         
     def flux_1sim_BINS(self, Erange, Ebins, dNdEdt, ma, ga):
-      """ computes how the flux would be reduced due to the distance [cm^-2] (BINNED), considering the contributions of EVERY SN in 1 SIMULATION """
+      """ computes how the flux would be reduced due to the distance [cm^-2] (BINNED-> normalized to bin size, so cm^-2 MeV^-1), considering the contributions of EVERY SN in 1 SIMULATION """
 
       result_bins = [] # flux per bin
 
@@ -199,9 +205,9 @@ class ALPphotonDET:
 	      			Eoverlap_min,
                 		Eoverlap_max, 
                 		epsrel=1e-2, epsabs=1e-2 )
-	      		integral_bin += integral
+	      		integral_bin += integral # cm^-2 MeV
 
-	      result_bins.append(integral_bin)
+	      result_bins.append(integral_bin / (Ebin_max - Ebin_min)) # cm^-2
 
       return np.array(result_bins) * self.Deltat * self.stoMeVminus1 # cm^-2 MeV^-1
 
@@ -222,9 +228,9 @@ class ALPphotonDET:
         flux_sum = 0.0
         for E1, E2, dSN in Erange:
             if E1 <= Ea <= E2:
-                flux = dNdEdt(Ea, ma, ga) * (1 / (4 * np.pi * (dSN * self.kpctocm)**2))  # cm⁻² MeV⁻¹ s⁻¹
+                flux = dNdEdt(Ea, ma, ga) * (1 / (4 * np.pi * (dSN * self.kpctocm)**2))  # cm⁻²  (dNdEdt adimensional)
                 flux_sum += flux
-        return flux_sum * self.dSigma_dEgamma(Egamma, Ea, ma, ga) # MeV^-2 s⁻¹
+        return flux_sum * self.dSigma_dEgamma(Egamma, Ea, ma, ga) # cm⁻² MeV**-3 # (dsigmadEgamma in MeV**-3)
 
       integral_result, _ = quad(
         integrand,
@@ -232,9 +238,9 @@ class ALPphotonDET:
         Eamax_val,
         epsrel=1e-2,
         epsabs=1e-2
-      )
+      ) # cm⁻² MeV**-2
 
-      return self.cmminus1toMeV**2 * self.Deltat * integral_result # MeV^-1
+      return self.cmminus1toMeV**2 * self.Deltat * integral_result # s
       
       
     def dNgammadEgamma_1sim_BINS(self, Egamma_bins, ma, ga, dNdEdt, Erange):
@@ -252,6 +258,38 @@ class ALPphotonDET:
         binned_vals.append(integral / (Ebin_max - Ebin_min))
         
       return np.array(binned_vals)
+      
+      
+    def dspectra_from_fluence_BINS(self, Egamma_bins, Ea_bins, Fa_bins, ma, ga):
+        """ dNγ/dEγ considering all simulated SN, but using the already binned flux flux_1sim_BINS """
+
+        
+        dE_a = Ea_bins[1] - Ea_bins[0]
+        Ea_centers = 0.5 * (Ea_bins[:-1] + Ea_bins[1:])
+
+        events_bins = []
+
+        for i in range(len(Egamma_bins) - 1):
+            Egamma_min, Egamma_max = Egamma_bins[i], Egamma_bins[i+1]
+
+            events_bin = 0.0
+
+            for j, Ea in enumerate(Ea_centers):
+
+                # integrate dσ/dEgamma over recoil bin
+                sigma_bin, _ = quad(
+                    lambda Egamma: self.dSigma_dEgamma(Egamma, Ea, ma, ga), # (dsigmadEgamma in MeV**-3)
+                    Egamma_min,
+                    Egamma_max,
+                    epsrel=1e-2,
+                    epsabs=1e-2
+                ) # MeV**-2
+
+                events_bin += Fa_bins[j] * sigma_bin * dE_a * self.cmminus1toMeV**2  # adimensional   # cm^-2 MeV**-1 * MeV**-3 * (cm**-2 MeV**2)
+
+            events_bins.append(events_bin / (Egamma_max - Egamma_min)) # MeV**-1
+
+        return np.array(events_bins)
       
       
     def Zthobs_1sim(self, ma, ga, dNdEdt, Ntargets, exptime, bins, Bth, Nobs, Erange):
